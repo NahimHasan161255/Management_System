@@ -22,6 +22,26 @@ Open the Vite URL shown in the terminal (normally `http://127.0.0.1:5173`). The
 frontend calls the API through its development proxy; the API listens on
 `127.0.0.1:3001` by default.
 
+### PostgreSQL migrations
+
+Install PostgreSQL 14 or later locally, create an empty `hsms_dev` database,
+copy `apps\api\.env.example` to `apps\api\.env`, and replace the example
+database password with your local PostgreSQL password. Do not commit `.env`.
+The API still binds to localhost; PostgreSQL should not be exposed to the LAN.
+
+Apply or roll back one migration from the repository root:
+
+```powershell
+npm run migrate:up
+npm run migrate:down
+```
+
+The initial migration creates users, roles, permissions, role assignments,
+role permissions, and hashed-token session storage, and seeds the Admin and
+Staff roles with baseline permissions. It does not create student records or
+implement login yet. Run rollback only when you intend to remove the tables
+introduced by that migration and all data stored in them.
+
 To run checks:
 
 ```powershell
@@ -34,9 +54,9 @@ npm run build
 
 This increment provides the React/TypeScript frontend, Express/TypeScript API,
 input-validation and centralized error-handling foundations, and a health
-endpoint. It does not yet include authentication, authorization, a database,
-student data, or LAN access. Keep both development servers bound to localhost;
-do not expose them to a network.
+endpoint. The API does not yet connect to the database and authentication,
+authorization, student data, and LAN access are not implemented. Keep both
+development servers bound to localhost; do not expose them to a network.
 
 The approved design is to add PostgreSQL, server-side authorization, secure
 document storage, and LAN-only deployment in later increments. Database schema

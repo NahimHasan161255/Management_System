@@ -12,7 +12,9 @@
     "dev:web": "npm run dev --workspace @hsms/web",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "migrate:up": "npm run migrate:up --workspace @hsms/api",
+    "migrate:down": "npm run migrate:down --workspace @hsms/api"
   },
   "devDependencies": {
     "concurrently": "10.0.6"
