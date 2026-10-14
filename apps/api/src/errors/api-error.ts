@@ -3,9 +3,10 @@ export class ApiError extends Error {
     readonly statusCode: number,
     readonly code: string,
     message: string,
-    readonly details?: unknown
+    readonly details?: unknown,
+    options?: ErrorOptions
   ) {
-    super(message);
+    super(message, options);
     this.name = "ApiError";
   }
 }

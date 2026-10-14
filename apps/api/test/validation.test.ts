@@ -3,9 +3,16 @@ import { describe, it } from "node:test";
 import express from "express";
 import request from "supertest";
 import { z } from "zod";
-import { app as apiApp } from "../src/app.js";
+import { createApp } from "../src/app.js";
 import { errorHandler, notFoundHandler } from "../src/middleware/error-handler.js";
 import { validateBody } from "../src/middleware/validate-body.js";
+
+const apiApp = createApp({ query: async () => ({ rows: [{ "?column?": 1 }] }) });
+const unavailableApiApp = createApp({
+  query: async () => {
+    throw new Error("Internal database connection details");
+  }
+});
 
 const app = express();
 app.use(express.json());
@@ -23,6 +30,22 @@ describe("API foundation", () => {
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body, { status: "ok", service: "api" });
+  });
+
+  it("reports readiness only when the database probe succeeds", async () => {
+    const response = await request(apiApp).get("/api/ready");
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, { status: "ok", database: "ok" });
+  });
+
+  it("returns a sanitized dependency error when the database probe fails", async () => {
+    const response = await request(unavailableApiApp).get("/api/ready");
+
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error.code, "DEPENDENCY_UNAVAILABLE");
+    assert.equal(response.body.error.message, "Database is unavailable");
+    assert.equal(JSON.stringify(response.body).includes("Internal database connection details"), false);
   });
 
   it("accepts a valid request body", async () => {

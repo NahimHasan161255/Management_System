@@ -42,6 +42,11 @@ Staff roles with baseline permissions. It does not create student records or
 implement login yet. Run rollback only when you intend to remove the tables
 introduced by that migration and all data stored in them.
 
+The API requires a valid PostgreSQL connection URL in `apps\api\.env`. Its
+`/api/health` endpoint reports process liveness; `/api/ready` executes a
+database query and returns HTTP 503 when PostgreSQL is unavailable. The server
+drains HTTP requests and closes the connection pool during shutdown.
+
 To run checks:
 
 ```powershell
@@ -54,7 +59,7 @@ npm run build
 
 This increment provides the React/TypeScript frontend, Express/TypeScript API,
 input-validation and centralized error-handling foundations, and a health
-endpoint. The API does not yet connect to the database and authentication,
+endpoints backed by a PostgreSQL connection pool. Authentication,
 authorization, student data, and LAN access are not implemented. Keep both
 development servers bound to localhost; do not expose them to a network.
 

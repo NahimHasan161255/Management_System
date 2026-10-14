@@ -1,8 +1,9 @@
 import "dotenv/config";
-import { app } from "./app.js";
+import { createApp } from "./app.js";
 import { environment } from "./config.js";
+import { pool } from "./database/pool.js";
 
-app.listen(environment.API_PORT, environment.API_HOST, () => {
+const server = createApp(pool).listen(environment.API_PORT, environment.API_HOST, () => {
   console.info(JSON.stringify({
     level: "info",
     event: "api_started",
@@ -11,3 +12,40 @@ app.listen(environment.API_PORT, environment.API_HOST, () => {
     environment: environment.NODE_ENV
   }));
 });
+
+let shuttingDown = false;
+
+function shutdown(signal: NodeJS.Signals) {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
+  console.info(JSON.stringify({ level: "info", event: "api_shutdown_started", signal }));
+
+  server.close((serverError) => {
+    void pool.end().then(() => {
+      if (serverError) {
+        console.error(JSON.stringify({
+          level: "error",
+          event: "api_shutdown_failed",
+          error: serverError.name
+        }));
+        process.exitCode = 1;
+        return;
+      }
+
+      console.info(JSON.stringify({ level: "info", event: "api_shutdown_complete" }));
+    }).catch((error: unknown) => {
+      console.error(JSON.stringify({
+        level: "error",
+        event: "database_pool_shutdown_failed",
+        error: error instanceof Error ? error.name : "UnknownError"
+      }));
+      process.exitCode = 1;
+    });
+  });
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

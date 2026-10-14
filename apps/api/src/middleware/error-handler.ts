@@ -20,7 +20,11 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
       event: "request_failed",
       method: request.method,
       path: request.path,
-      error: error instanceof Error ? error.name : "UnknownError"
+      error: apiError?.cause instanceof Error
+        ? apiError.cause.name
+        : error instanceof Error
+          ? error.name
+          : "UnknownError"
     }));
   }
 
