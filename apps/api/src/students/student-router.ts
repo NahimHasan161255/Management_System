@@ -1,0 +1,199 @@
+import { randomUUID } from "node:crypto";
+import { Router } from "express";
+import { z } from "zod";
+import { ApiError } from "../errors/api-error.js";
+import type { Queryable } from "../database/queryable.js";
+import { validateBody } from "../middleware/validate-body.js";
+import { studentStatuses, toStudent } from "./student.js";
+import type { StudentRow } from "./student.js";
+
+const studentFields = {
+  fullName: z.string().trim().min(1).max(200),
+  email: z.union([z.string().trim().email().max(320), z.literal("")]).nullable().optional(),
+  phone: z.union([z.string().trim().max(50), z.literal("")]).nullable().optional(),
+  nationality: z.union([z.string().trim().max(100), z.literal("")]).nullable().optional(),
+  status: z.enum(studentStatuses)
+};
+
+const createStudentSchema = z.object({
+  ...studentFields,
+  confirmPotentialDuplicate: z.boolean().default(false)
+});
+const updateStudentSchema = z.object({
+  fullName: studentFields.fullName.optional(),
+  email: studentFields.email,
+  phone: studentFields.phone,
+  nationality: studentFields.nationality,
+  status: studentFields.status.optional()
+}).refine((value) => Object.keys(value).length > 0, "At least one field must be provided");
+
+const listQuerySchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  status: z.enum(studentStatuses).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20)
+});
+
+const idSchema = z.string().uuid();
+
+export function createStudentRouter(database: Queryable) {
+  const router = Router();
+
+  router.get("/", async (request, response, next) => {
+    const query = listQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      next(new ApiError(400, "VALIDATION_ERROR", "Query parameters are invalid", query.error.issues));
+      return;
+    }
+
+    const { q, status, page, pageSize } = query.data;
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+
+    if (q) {
+      values.push(q);
+      conditions.push(`position(lower($${values.length}) in lower(concat_ws(' ', internal_id, full_name, email, phone, nationality))) > 0`);
+    }
+    if (status) {
+      values.push(status);
+      conditions.push(`status = $${values.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    try {
+      const countResult = await database.query<{ total: string }>(
+        `SELECT count(*)::text AS total FROM students ${where}`,
+        values
+      );
+      const total = Number(countResult.rows[0]?.total ?? 0);
+      const pageValues = [...values, pageSize, (page - 1) * pageSize];
+      const result = await database.query<StudentRow>(
+        `SELECT id, internal_id, full_name, email, phone, nationality, status, created_at, updated_at
+         FROM students ${where}
+         ORDER BY updated_at DESC, id
+         LIMIT $${pageValues.length - 1} OFFSET $${pageValues.length}`,
+        pageValues
+      );
+
+      response.json({
+        items: result.rows.map(toStudent),
+        total,
+        page,
+        pageSize
+      });
+    } catch (error: unknown) {
+      next(error);
+    }
+  });
+
+  router.get("/:id", async (request, response, next) => {
+    const id = idSchema.safeParse(request.params.id);
+    if (!id.success) {
+      next(new ApiError(400, "VALIDATION_ERROR", "Student ID must be a UUID"));
+      return;
+    }
+
+    try {
+      const result = await database.query<StudentRow>(
+        `SELECT id, internal_id, full_name, email, phone, nationality, status, created_at, updated_at
+         FROM students WHERE id = $1`,
+        [id.data]
+      );
+      const student = result.rows[0];
+      if (!student) {
+        next(new ApiError(404, "STUDENT_NOT_FOUND", "Student was not found"));
+        return;
+      }
+      response.json({ student: toStudent(student) });
+    } catch (error: unknown) {
+      next(error);
+    }
+  });
+
+  router.post("/", validateBody(createStudentSchema), async (request, response, next) => {
+    const input = createStudentSchema.parse(request.body);
+    const internalId = `STU-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
+
+    try {
+      const duplicateResult = await database.query<{
+        internal_id: string;
+        full_name: string;
+        email: string | null;
+        status: string;
+      }>(
+        `SELECT internal_id, full_name, email, status
+         FROM students
+         WHERE lower(full_name) = lower($1)
+            OR ($2::text IS NOT NULL AND lower(email) = lower($2))
+         ORDER BY updated_at DESC
+         LIMIT 5`,
+        [input.fullName, input.email || null]
+      );
+
+      if (duplicateResult.rows.length > 0 && !input.confirmPotentialDuplicate) {
+        next(new ApiError(
+          409,
+          "POTENTIAL_DUPLICATE",
+          "Similar student records already exist. Review them before creating another record.",
+          duplicateResult.rows
+        ));
+        return;
+      }
+
+      const result = await database.query<StudentRow>(
+        `INSERT INTO students (internal_id, full_name, email, phone, nationality, status)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, internal_id, full_name, email, phone, nationality, status, created_at, updated_at`,
+        [
+          internalId,
+          input.fullName,
+          input.email || null,
+          input.phone || null,
+          input.nationality || null,
+          input.status
+        ]
+      );
+      response.status(201).json({ student: toStudent(result.rows[0]!) });
+    } catch (error: unknown) {
+      next(error);
+    }
+  });
+
+  router.patch("/:id", validateBody(updateStudentSchema), async (request, response, next) => {
+    const id = idSchema.safeParse(request.params.id);
+    if (!id.success) {
+      next(new ApiError(400, "VALIDATION_ERROR", "Student ID must be a UUID"));
+      return;
+    }
+    const input = updateStudentSchema.parse(request.body);
+    const columns: Record<keyof typeof input, string> = {
+      fullName: "full_name",
+      email: "email",
+      phone: "phone",
+      nationality: "nationality",
+      status: "status"
+    };
+    const entries = Object.entries(input) as [keyof typeof input, unknown][];
+    const assignments = entries.map(([key], index) => `${columns[key]} = $${index + 2}`);
+    const values = entries.map(([, value]) => value === "" ? null : value);
+
+    try {
+      const result = await database.query<StudentRow>(
+        `UPDATE students SET ${assignments.join(", ")}, updated_at = now()
+         WHERE id = $1
+         RETURNING id, internal_id, full_name, email, phone, nationality, status, created_at, updated_at`,
+        [id.data, ...values]
+      );
+      const student = result.rows[0];
+      if (!student) {
+        next(new ApiError(404, "STUDENT_NOT_FOUND", "Student was not found"));
+        return;
+      }
+      response.json({ student: toStudent(student) });
+    } catch (error: unknown) {
+      next(error);
+    }
+  });
+
+  return router;
+}

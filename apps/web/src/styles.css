@@ -1,11 +1,14 @@
+@import "antd/dist/reset.css";
+
 :root {
   font-family: Inter, "Segoe UI", sans-serif;
   color: #17253b;
-  background: #f4f7fb;
+  background: #f5f7fa;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
 }
 
 * {
@@ -13,88 +16,315 @@
 }
 
 body {
-  min-width: 320px;
+  min-width: 360px;
   min-height: 100vh;
   margin: 0;
+  background: #f5f7fa;
 }
 
-.page {
-  display: grid;
+.app-layout {
   min-height: 100vh;
-  place-items: center;
-  padding: 32px 20px;
+  background: #f5f7fa;
 }
 
-.welcome-card {
-  width: min(100%, 720px);
-  padding: clamp(28px, 6vw, 56px);
-  border: 1px solid #e1e8f0;
-  border-radius: 20px;
+.topbar {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(20px, 5vw, 72px);
+  border-bottom: 1px solid #e7ebf0;
   background: #fff;
-  box-shadow: 0 20px 60px rgb(27 51 83 / 8%);
+  line-height: normal;
+}
+
+.brand,
+.topbar-meta {
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  gap: 11px;
+  color: #17253b;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: #234f78;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.brand-name {
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+}
+
+.brand-name .ant-typography {
+  margin-left: 5px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.topbar-meta {
+  gap: 9px;
+  font-size: 13px;
+}
+
+.local-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #38a169;
+}
+
+.avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  margin-left: 12px;
+  place-items: center;
+  border-radius: 50%;
+  color: #315473;
+  background: #eaf0f6;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.main-content {
+  padding: 30px clamp(20px, 5vw, 72px) 24px;
+}
+
+.content-width {
+  width: min(100%, 1280px);
+  margin: 0 auto;
+}
+
+.breadcrumb {
+  margin-bottom: 24px;
+  color: #748197;
+  font-size: 13px;
+}
+
+.breadcrumb span {
+  margin: 0 9px;
+  color: #bbc3cf;
+}
+
+.page-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.page-heading h1.ant-typography {
+  margin: 5px 0 7px;
+  color: #17253b;
+  font-size: clamp(28px, 4vw, 36px);
+  letter-spacing: -0.04em;
 }
 
 .eyebrow {
-  margin: 0 0 12px;
-  color: #2563a6;
-  font-size: 0.8rem;
+  color: #63809a;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.12em;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  border-color: #e7ebf0;
+  box-shadow: 0 2px 8px rgb(29 47 67 / 3%);
+}
+
+.summary-card .ant-statistic-title {
+  color: #718096;
+  font-size: 13px;
+}
+
+.summary-card .ant-statistic-content {
+  color: #203f5d;
+  font-size: 28px;
+  font-weight: 650;
+}
+
+.summary-card > .ant-card-body > .ant-typography {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.table-card {
+  overflow: hidden;
+  border-color: #e7ebf0;
+  box-shadow: 0 2px 8px rgb(29 47 67 / 3%);
+}
+
+.table-toolbar {
+  display: flex;
+  min-height: 94px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.table-toolbar h4.ant-typography {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.table-toolbar .ant-typography-secondary {
+  font-size: 12px;
+}
+
+.table-card .ant-table-wrapper {
+  padding: 0 12px;
+}
+
+.table-card .ant-table-thead > tr > th {
+  color: #758197;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-h1 {
-  max-width: 560px;
-  margin: 0;
-  font-size: clamp(2rem, 5vw, 3.25rem);
-  letter-spacing: -0.045em;
-  line-height: 1.08;
-}
-
-.intro {
-  max-width: 560px;
-  margin: 20px 0 28px;
-  color: #53647a;
-  font-size: 1.05rem;
-  line-height: 1.65;
-}
-
-.api-status {
+.student-name-cell {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-weight: 600;
+  flex-direction: column;
+  gap: 3px;
 }
 
-.api-status--checking {
-  color: #765314;
-  background: #fff7df;
+.student-id {
+  font-family: Consolas, monospace;
+  font-size: 11px;
 }
 
-.api-status--available {
-  color: #17623b;
-  background: #eaf7ef;
+.loading-state,
+.empty-state {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
 }
 
-.api-status--unavailable {
-  color: #963737;
-  background: #fff0f0;
+.empty-state {
+  padding: 32px 16px;
 }
 
-.status-indicator {
-  width: 9px;
-  height: 9px;
-  flex: 0 0 9px;
-  border-radius: 50%;
-  background: currentColor;
+.error-alert {
+  margin-bottom: 20px;
 }
 
-.scope-note {
-  margin: 18px 0 0;
-  color: #758398;
-  font-size: 0.88rem;
+.page-footer {
+  padding: 20px 4px;
+  color: #818b9a;
+  font-size: 11px;
   line-height: 1.5;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-hint {
+  display: block;
+  margin-top: -10px;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    height: 60px;
+  }
+
+  .topbar-meta > .ant-typography {
+    display: none;
+  }
+
+  .main-content {
+    padding-top: 22px;
+  }
+
+  .page-heading {
+    align-items: start;
+  }
+
+  .page-heading > .ant-btn {
+    flex-shrink: 0;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .summary-card > .ant-card-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .summary-card > .ant-card-body > .ant-typography {
+    margin-top: 0;
+    text-align: right;
+  }
+
+  .table-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 18px;
+  }
+
+  .table-toolbar > .ant-space {
+    width: 100%;
+  }
+
+  .table-toolbar .ant-input-search {
+    flex: 1;
+    width: auto !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-heading {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .page-heading > .ant-btn {
+    width: 100%;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
 }

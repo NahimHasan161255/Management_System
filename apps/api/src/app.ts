@@ -1,12 +1,10 @@
 import express from "express";
+import type { Queryable } from "./database/queryable.js";
 import { ApiError } from "./errors/api-error.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import { createStudentRouter } from "./students/student-router.js";
 
-export interface DatabaseProbe {
-  query(text: string): Promise<unknown>;
-}
-
-export function createApp(database: DatabaseProbe) {
+export function createApp(database: Queryable) {
   const app = express();
 
   app.disable("x-powered-by");
@@ -30,6 +28,8 @@ export function createApp(database: DatabaseProbe) {
       ));
     }
   });
+
+  app.use("/api/students", createStudentRouter(database));
 
   app.use(notFoundHandler);
   app.use(errorHandler);
