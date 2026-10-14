@@ -1,0 +1,100 @@
+:root {
+  font-family: Inter, "Segoe UI", sans-serif;
+  color: #17253b;
+  background: #f4f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+.page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 32px 20px;
+}
+
+.welcome-card {
+  width: min(100%, 720px);
+  padding: clamp(28px, 6vw, 56px);
+  border: 1px solid #e1e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgb(27 51 83 / 8%);
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: #2563a6;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+h1 {
+  max-width: 560px;
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  letter-spacing: -0.045em;
+  line-height: 1.08;
+}
+
+.intro {
+  max-width: 560px;
+  margin: 20px 0 28px;
+  color: #53647a;
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.api-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.api-status--checking {
+  color: #765314;
+  background: #fff7df;
+}
+
+.api-status--available {
+  color: #17623b;
+  background: #eaf7ef;
+}
+
+.api-status--unavailable {
+  color: #963737;
+  background: #fff0f0;
+}
+
+.status-indicator {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.scope-note {
+  margin: 18px 0 0;
+  color: #758398;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
