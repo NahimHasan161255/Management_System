@@ -7,7 +7,9 @@ import { createApp } from "../src/app.js";
 import { errorHandler, notFoundHandler } from "../src/middleware/error-handler.js";
 import { validateBody } from "../src/middleware/validate-body.js";
 
-const apiApp = createApp({ query: async () => ({ rows: [{ "?column?": 1 }] }) });
+const apiApp = createApp({
+  query: async <Row>() => ({ rows: [] as Row[], rowCount: 0 })
+});
 const unavailableApiApp = createApp({
   query: async () => {
     throw new Error("Internal database connection details");

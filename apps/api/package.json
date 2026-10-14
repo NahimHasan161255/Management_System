@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/validation.test.ts test/migration.test.mjs",
+    "test": "tsx --test test/*.test.ts test/*.test.mjs",
     "migrate:up": "node-pg-migrate up --envPath .env --migrations-dir migrations",
     "migrate:down": "node-pg-migrate down --envPath .env --migrations-dir migrations"
   },

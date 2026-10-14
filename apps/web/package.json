@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.1.2",
+    "antd": "^6.6.6",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
