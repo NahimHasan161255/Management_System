@@ -11,6 +11,19 @@ export const studentStatuses = [
 
 export type StudentStatus = (typeof studentStatuses)[number];
 
+export type StudentDocumentType =
+  | "passport_photo"
+  | "ssc_certificate"
+  | "ssc_transcript"
+  | "hsc_certificate"
+  | "hsc_transcript"
+  | "bachelor_certificate"
+  | "bachelor_transcript"
+  | "last_degree_certificate"
+  | "last_degree_transcript"
+  | "passport"
+  | "language_proof";
+
 export interface Student {
   id: string;
   internalId: string;
@@ -18,9 +31,37 @@ export interface Student {
   email: string | null;
   phone: string | null;
   nationality: string | null;
+  snsUrl: string | null;
+  lastDegree: string | null;
+  languageQualification: "JLPT" | "IELTS" | "MOI" | null;
+  studyFields: string[];
   status: StudentStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StudentIntakeInput {
+  fullName: string;
+  email: string;
+  phone: string;
+  snsUrl: string;
+  lastDegree: string;
+  languageQualification: "" | "JLPT" | "IELTS" | "MOI";
+  studyFields: string[];
+}
+
+export interface StudentDocument {
+  type: StudentDocumentType;
+  fileName: string;
+  contentType: string;
+  size: number | null;
+  externalUrl: string | null;
+}
+
+export interface StudentImportResult {
+  totalRows: number;
+  imported: { row: number; fullName: string; internalId: string }[];
+  skipped: { row: number; fullName: string; reason: string }[];
 }
 
 export interface StudentInput {
@@ -86,7 +127,6 @@ async function readResponse<T>(response: Response): Promise<T> {
 
 export async function listStudents(options: {
   q?: string;
-  status?: StudentStatus;
   page: number;
   pageSize: number;
   signal?: AbortSignal;
@@ -96,10 +136,14 @@ export async function listStudents(options: {
     pageSize: String(options.pageSize)
   });
   if (options.q) params.set("q", options.q);
-  if (options.status) params.set("status", options.status);
 
   const response = await fetch(`/api/students?${params}`, { signal: options.signal });
   return readResponse<StudentPage>(response);
+}
+
+export async function checkApiReadiness(signal?: AbortSignal): Promise<void> {
+  const response = await fetch("/api/ready", { signal });
+  await readResponse<{ status: string; database: string }>(response);
 }
 
 export async function createStudent(
@@ -113,6 +157,34 @@ export async function createStudent(
   });
   const body = await readResponse<{ student: Student }>(response);
   return body.student;
+}
+
+export async function submitStudentIntake(
+  profile: StudentIntakeInput,
+  files: Partial<Record<StudentDocumentType, File>>
+): Promise<Student> {
+  const form = new FormData();
+  form.set("profile", JSON.stringify(profile));
+  for (const [type, file] of Object.entries(files)) {
+    if (file) form.set(type, file);
+  }
+
+  const response = await fetch("/api/student-intake", { method: "POST", body: form });
+  const body = await readResponse<{ student: Student }>(response);
+  return body.student;
+}
+
+export async function listStudentDocuments(id: string): Promise<StudentDocument[]> {
+  const response = await fetch(`/api/students/${encodeURIComponent(id)}/documents`);
+  const body = await readResponse<{ documents: StudentDocument[] }>(response);
+  return body.documents;
+}
+
+export async function importStudentCsv(file: File): Promise<StudentImportResult> {
+  const form = new FormData();
+  form.set("file", file);
+  const response = await fetch("/api/students/import", { method: "POST", body: form });
+  return readResponse<StudentImportResult>(response);
 }
 
 export async function updateStudent(id: string, input: StudentInput): Promise<Student> {

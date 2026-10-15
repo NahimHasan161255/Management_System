@@ -4,83 +4,51 @@ import {
   Button,
   Card,
   Empty,
-  Form,
   Input,
   Layout,
   Modal,
-  Select,
+  Result,
   Space,
   Spin,
-  Statistic,
   Table,
-  Tag,
   Typography
 } from "antd";
 import type { TableColumnsType } from "antd";
-import { StudentApiError } from "./api/students";
+import { checkApiReadiness, importStudentCsv, listStudentDocuments } from "./api/students";
 import {
-  createStudent,
   listStudents,
-  studentStatuses,
-  updateStudent
 } from "./api/students";
-import type { Student, StudentInput, StudentStatus } from "./api/students";
+import type { Student, StudentDocument } from "./api/students";
+import { StudentIntakePage } from "./StudentIntakePage";
 
 const { Header, Content } = Layout;
 const { Text, Title } = Typography;
 const pageSize = 10;
 
-const statusLabels: Record<StudentStatus, string> = {
-  consultation: "Consultation",
-  profile_assessment: "Profile assessment",
-  research_selection: "Research selection",
-  application_preparation: "Application prep",
-  submitted: "Submitted",
-  admitted: "Admitted",
-  completed: "Completed",
-  inactive: "Inactive"
-};
-
-const statusColors: Record<StudentStatus, string> = {
-  consultation: "blue",
-  profile_assessment: "cyan",
-  research_selection: "purple",
-  application_preparation: "gold",
-  submitted: "processing",
-  admitted: "green",
-  completed: "success",
-  inactive: "default"
-};
-
-const statusOptions = studentStatuses.map((value) => ({
-  value,
-  label: statusLabels[value]
-}));
-
-function duplicateDescriptions(details: unknown): string[] {
-  if (!Array.isArray(details)) return [];
-
-  return details.flatMap((candidate) => {
-    if (typeof candidate !== "object" || candidate === null) return [];
-    if (!("internal_id" in candidate) || typeof candidate.internal_id !== "string") return [];
-    if (!("full_name" in candidate) || typeof candidate.full_name !== "string") return [];
-    return [`${candidate.full_name} (${candidate.internal_id})`];
-  });
+export function App() {
+  return window.location.pathname === "/apply"
+    ? <StudentIntakePage />
+    : <StudentManager />;
 }
 
-export function App() {
+function StudentManager() {
   const [students, setStudents] = useState<Student[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<StudentStatus | undefined>();
   const [page, setPage] = useState(1);
-  const [editing, setEditing] = useState<Student | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form] = Form.useForm<StudentInput>();
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [documents, setDocuments] = useState<StudentDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<Awaited<ReturnType<typeof importStudentCsv>> | null>(null);
 
   const loadStudents = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -88,7 +56,6 @@ export function App() {
     try {
       const result = await listStudents({
         q: search || undefined,
-        status,
         page,
         pageSize,
         signal
@@ -97,15 +64,21 @@ export function App() {
       setTotal(result.total);
     } catch (loadError) {
       if (signal?.aborted) return;
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Could not load students. Check that the API and PostgreSQL are available."
-      );
+      try {
+        await checkApiReadiness(signal);
+        setError(
+          "Student records could not be loaded. Check that the latest database migrations have been applied, then retry."
+        );
+      } catch {
+        if (signal?.aborted) return;
+        setError(
+          "Cannot connect to PostgreSQL. Start the local PostgreSQL service, check DATABASE_URL in apps\\api\\.env, then retry."
+        );
+      }
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [page, search, status]);
+  }, [page, search]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,79 +86,40 @@ export function App() {
     return () => controller.abort();
   }, [loadStudents]);
 
-  function openCreate() {
-    setEditing(null);
-    form.resetFields();
-    form.setFieldsValue({ status: "consultation" });
-    setModalOpen(true);
-  }
-
-  function openEdit(student: Student) {
-    setEditing(student);
-    form.setFieldsValue({
-      fullName: student.fullName,
-      email: student.email ?? "",
-      phone: student.phone ?? "",
-      nationality: student.nationality ?? "",
-      status: student.status
-    });
-    setModalOpen(true);
-  }
-
-  async function persistStudent(values: StudentInput, confirmPotentialDuplicate: boolean) {
-    setSaving(true);
+  async function openDetails(student: Student) {
+    setSelectedStudent(student);
+    setDocuments([]);
+    setDetailError(null);
+    setDetailOpen(true);
+    setDocumentsLoading(true);
     try {
-      if (editing) {
-        await updateStudent(editing.id, values);
-      } else {
-        await createStudent(values, confirmPotentialDuplicate);
-      }
-      setModalOpen(false);
-      if (editing) {
-        await loadStudents();
-      } else {
-        setSearchText("");
-        setSearch("");
-        setStatus(undefined);
-        setPage(1);
-      }
-    } catch (saveError) {
-      if (
-        !editing &&
-        !confirmPotentialDuplicate &&
-        saveError instanceof StudentApiError &&
-        saveError.code === "POTENTIAL_DUPLICATE"
-      ) {
-        const matches = duplicateDescriptions(saveError.details);
-        Modal.confirm({
-          title: "Possible duplicate student",
-          content: (
-            <div>
-              <p>{saveError.message}</p>
-              {matches.length > 0 && (
-                <ul>{matches.map((match) => <li key={match}>{match}</li>)}</ul>
-              )}
-            </div>
-          ),
-          okText: "Create a separate record",
-          cancelText: "Review existing records",
-          onOk: () => persistStudent(values, true)
-        });
-        return;
-      }
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Could not save this student. Please try again."
-      );
+      setDocuments(await listStudentDocuments(student.id));
+    } catch (loadError) {
+      setDetailError(loadError instanceof Error ? loadError.message : "Could not load student documents.");
     } finally {
-      setSaving(false);
+      setDocumentsLoading(false);
     }
   }
 
-  async function saveStudent() {
-    const values = await form.validateFields();
-    await persistStudent(values, false);
+  async function submitImport() {
+    if (!importFile) return;
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const result = await importStudentCsv(importFile);
+      setImportResult(result);
+      setSearchText("");
+      setSearch("");
+      setPage(1);
+      const studentsPage = await listStudents({ page: 1, pageSize });
+      setStudents(studentsPage.items);
+      setTotal(studentsPage.total);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "The CSV could not be imported.");
+    } finally {
+      setImporting(false);
+    }
   }
 
   const columns: TableColumnsType<Student> = [
@@ -212,26 +146,11 @@ export function App() {
       )
     },
     {
-      title: "Nationality",
-      dataIndex: "nationality",
-      key: "nationality",
-      responsive: ["lg"],
-      render: (value: string | null) => value || "—"
-    },
-    {
-      title: "Journey stage",
-      dataIndex: "status",
-      key: "status",
-      render: (value: StudentStatus) => (
-        <Tag color={statusColors[value]}>{statusLabels[value]}</Tag>
-      )
-    },
-    {
       title: "",
       key: "action",
       align: "right",
       render: (_value, student) => (
-        <Button type="link" onClick={() => openEdit(student)}>Edit</Button>
+        <Button type="link" onClick={() => void openDetails(student)}>View</Button>
       )
     }
   ];
@@ -239,7 +158,7 @@ export function App() {
   return (
     <Layout className="app-layout">
       <Header className="topbar">
-        <a className="brand" href="/" aria-label="Japan Higher Study Management System home">
+        <a className="brand" href="/" aria-label="Japan Student Management System home">
           <span className="brand-mark">J</span>
           <span className="brand-name">HSM <Text type="secondary">JAPAN</Text></span>
         </a>
@@ -252,15 +171,21 @@ export function App() {
 
       <Content className="main-content">
         <div className="content-width">
-          <div className="breadcrumb">Workspace <span>/</span> Students</div>
-
           <section className="page-heading">
             <div>
-              <Text className="eyebrow">STUDENT CRM</Text>
+              <Text className="eyebrow">STUDENT MANAGEMENT</Text>
               <Title level={1}>Students</Title>
-              <Text type="secondary">Manage student profiles and track their journey to Japan.</Text>
+              <Text type="secondary">Search student profiles, review documents, or import Google Forms responses.</Text>
             </div>
-            <Button type="primary" size="large" onClick={openCreate}>Add student</Button>
+            <Space wrap>
+              <Button onClick={() => {
+                setImportOpen(true);
+                setImportFile(null);
+                setImportError(null);
+                setImportResult(null);
+              }}>Import Google Forms CSV</Button>
+              <Button href="/apply" target="_blank">Preview student form</Button>
+            </Space>
           </section>
 
           {error && (
@@ -269,31 +194,16 @@ export function App() {
               type="error"
               showIcon
               title="Student records could not be loaded"
-              description={`${error} Make sure PostgreSQL is running, the database is configured in apps\\api\\.env, and migrations have been applied.`}
+              description={error}
               action={<Button size="small" onClick={() => void loadStudents()}>Retry</Button>}
             />
           )}
 
-          <div className="summary-grid">
-            <Card className="summary-card">
-              <Statistic title="Student records" value={error ? "—" : total} />
-              <Text type="secondary">Matching your current filters</Text>
-            </Card>
-            <Card className="summary-card summary-card-muted">
-              <Statistic title="Showing on this page" value={error ? "—" : students.length} />
-              <Text type="secondary">Up to {pageSize} records per page</Text>
-            </Card>
-            <Card className="summary-card summary-card-muted">
-              <Statistic title="Current page" value={error ? "—" : page} />
-              <Text type="secondary">Search and filters update results</Text>
-            </Card>
-          </div>
-
           <Card className="table-card" styles={{ body: { padding: 0 } }}>
             <div className="table-toolbar">
               <div>
-                <Title level={4}>All students</Title>
-                <Text type="secondary">Search by student ID, name, email, phone or nationality.</Text>
+                <Title level={4}>Student records <Text type="secondary">({error ? "—" : total})</Text></Title>
+                <Text type="secondary">Search by name, student ID, email, phone or study field.</Text>
               </div>
               <Space wrap>
                 <Input.Search
@@ -307,30 +217,26 @@ export function App() {
                   }}
                   style={{ width: 250 }}
                 />
-                <Select
-                  allowClear
-                  placeholder="All stages"
-                  options={statusOptions}
-                  value={status}
-                  onChange={(value: StudentStatus | undefined) => {
-                    setPage(1);
-                    setStatus(value);
-                  }}
-                  style={{ width: 190 }}
-                />
               </Space>
             </div>
 
             {loading ? (
               <div className="loading-state"><Spin size="large" /></div>
-            ) : !error && students.length === 0 ? (
+            ) : error ? (
               <div className="empty-state">
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={search || status ? "No students match these filters" : "No student records yet"}
+                  description="Student records are unavailable until the database connection is restored"
                 >
-                  {!search && !status && <Button type="primary" onClick={openCreate}>Add your first student</Button>}
+                  <Button onClick={() => void loadStudents()}>Retry</Button>
                 </Empty>
+              </div>
+            ) : students.length === 0 ? (
+              <div className="empty-state">
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={search ? "No students match this search" : "No student records yet"}
+                />
               </div>
             ) : (
               <Table<Student>
@@ -345,59 +251,120 @@ export function App() {
                   onChange: setPage,
                   showTotal: (count, range) => `${range[0]}–${range[1]} of ${count}`
                 }}
-                scroll={{ x: 660 }}
+                scroll={{ x: 540 }}
               />
             )}
           </Card>
 
           <footer className="page-footer">
-            Student information is sensitive. This development app is restricted to this PC and is not ready for LAN access.
+            Student information is sensitive. This app is local-only; do not expose it to a network.
           </footer>
         </div>
       </Content>
 
       <Modal
-        title={editing ? "Edit student" : "Add student"}
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        onOk={() => void saveStudent()}
-        okText={editing ? "Save changes" : "Create student"}
-        confirmLoading={saving}
-        forceRender
+        title="Student information"
+        open={detailOpen}
+        onCancel={() => setDetailOpen(false)}
+        footer={<Button onClick={() => setDetailOpen(false)}>Close</Button>}
       >
-        <Form<StudentInput>
-          form={form}
-          layout="vertical"
-          requiredMark="optional"
-          initialValues={{ status: "consultation" }}
-        >
-          <Form.Item
-            name="fullName"
-            label="Full name"
-            rules={[{ required: true, whitespace: true, message: "Enter the student's name" }, { max: 200 }]}
-          >
-            <Input autoComplete="name" placeholder="Student full name" />
-          </Form.Item>
-          <Form.Item name="email" label="Email" rules={[{ type: "email", message: "Enter a valid email address" }, { max: 320 }]}>
-            <Input autoComplete="email" placeholder="name@example.com" />
-          </Form.Item>
-          <div className="form-row">
-            <Form.Item name="phone" label="Phone" rules={[{ max: 50 }]} className="form-grow">
-              <Input autoComplete="tel" placeholder="Phone number" />
-            </Form.Item>
-            <Form.Item name="nationality" label="Nationality" rules={[{ max: 100 }]} className="form-grow">
-              <Input placeholder="Nationality" />
-            </Form.Item>
+        {selectedStudent && (
+          <div className="student-details">
+            <div><Text type="secondary">Student ID</Text><Text strong>{selectedStudent.internalId}</Text></div>
+            <div><Text type="secondary">Name</Text><Text>{selectedStudent.fullName}</Text></div>
+            <div><Text type="secondary">Contact</Text><Text>{selectedStudent.phone || "—"}</Text></div>
+            <div><Text type="secondary">Email</Text><Text>{selectedStudent.email || "—"}</Text></div>
+            <div><Text type="secondary">Social profile</Text>
+              {selectedStudent.snsUrl
+                ? <a href={selectedStudent.snsUrl} target="_blank" rel="noreferrer">{selectedStudent.snsUrl}</a>
+                : <Text>—</Text>}
+            </div>
+            <div><Text type="secondary">Last degree</Text><Text>{selectedStudent.lastDegree || "—"}</Text></div>
+            <div><Text type="secondary">Language qualification</Text><Text>{selectedStudent.languageQualification || "—"}</Text></div>
+            <div><Text type="secondary">Study fields</Text><Text>{selectedStudent.studyFields.join(", ") || "—"}</Text></div>
+            <div className="student-documents">
+              <Text strong>Uploaded documents</Text>
+              {detailError && <Alert type="error" showIcon message={detailError} />}
+              {documentsLoading ? (
+                <Spin size="small" />
+              ) : documents.length ? (
+                <ul>
+                  {documents.map((document) => (
+                    <li key={document.type}>
+                      <a
+                        href={document.externalUrl ?? `/api/students/${encodeURIComponent(selectedStudent.id)}/documents/${encodeURIComponent(document.type)}`}
+                        download={document.externalUrl ? undefined : document.fileName}
+                        target={document.externalUrl ? "_blank" : undefined}
+                        rel={document.externalUrl ? "noreferrer" : undefined}
+                      >
+                        {document.fileName}{document.externalUrl ? " (Google Drive)" : ""}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : !detailError ? (
+                <Text type="secondary">No documents uploaded</Text>
+              ) : null}
+            </div>
           </div>
-          <Form.Item name="status" label="Journey stage" rules={[{ required: true }]}>
-            <Select options={statusOptions} />
-          </Form.Item>
-          {!editing && (
-            <Text type="secondary" className="form-hint">
-              A stable internal student ID will be generated automatically.
-            </Text>
-          )}
-        </Form>
+        )}
+      </Modal>
+
+      <Modal
+        title="Import Google Forms responses"
+        open={importOpen}
+        onCancel={() => setImportOpen(false)}
+        onOk={() => void submitImport()}
+        okText="Import responses"
+        confirmLoading={importing}
+        okButtonProps={{ disabled: !importFile || Boolean(importResult) }}
+        width={620}
+      >
+        {importResult ? (
+          <Result
+            status={importResult.skipped.length ? "warning" : "success"}
+            title={`${importResult.imported.length} of ${importResult.totalRows} students imported`}
+            subTitle={`${importResult.skipped.length} rows skipped. Duplicate names/emails are skipped to avoid creating duplicate records.`}
+          />
+        ) : (
+          <>
+            <Alert
+              className="error-alert"
+              type="info"
+              showIcon
+              title="Export the responses sheet as CSV"
+              description={(
+                <div>
+                  <p>Google Forms → Responses → open in Google Sheets → File → Download → Comma Separated Values (.csv).</p>
+                  <p><a href="/google-forms-student-template.csv" download>Download the sample CSV header template</a>. Use the same question titles in your form:</p>
+                  <p>Use these question titles in the form: Full name, Email address, Contact number, One social media profile link, Last completed degree, Language qualification, Interested study fields (up to 5), Passport-size photo, SSC certificate, SSC transcript, HSC certificate, HSC transcript, Bachelor certificate, Bachelor transcript, Last degree certificate, Last degree transcript, Passport, JLPT / IELTS / MOI proof.</p>
+                  <p>Use semicolons between study fields. CSV exports can contain Drive/Docs links for uploaded files; only Google Drive/Docs links are imported. Students may need a Google account for file-upload questions.</p>
+                </div>
+              )}
+            />
+            {importError && <Alert className="error-alert" type="error" showIcon title="Import failed" description={importError} />}
+            <Input
+              key={importFile?.name ?? "empty-csv"}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(event) => {
+                setImportFile(event.currentTarget.files?.[0] ?? null);
+                setImportError(null);
+              }}
+            />
+            {importFile && <Text type="secondary">{importFile.name}</Text>}
+          </>
+        )}
+        {importResult && importResult.skipped.length > 0 && (
+          <div className="import-skipped">
+            <Text strong>Skipped rows</Text>
+            <ul>
+              {importResult.skipped.map((row) => (
+                <li key={`${row.row}-${row.fullName}`}>Row {row.row} — {row.fullName}: {row.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Modal>
     </Layout>
   );

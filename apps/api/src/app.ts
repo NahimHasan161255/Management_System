@@ -2,6 +2,7 @@ import express from "express";
 import type { Queryable } from "./database/queryable.js";
 import { ApiError } from "./errors/api-error.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import { createIntakeRouter } from "./students/intake-router.js";
 import { createStudentRouter } from "./students/student-router.js";
 
 export function createApp(database: Queryable) {
@@ -29,6 +30,7 @@ export function createApp(database: Queryable) {
     }
   });
 
+  app.use("/api/student-intake", createIntakeRouter(database));
   app.use("/api/students", createStudentRouter(database));
 
   app.use(notFoundHandler);
