@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ApiError } from "../errors/api-error.js";
 import type { Queryable } from "../database/queryable.js";
 import { validateBody } from "../middleware/validate-body.js";
+import { createStudentImportHandler } from "./student-import.js";
 import { isStudentDocumentType, studentStatuses, toStudent } from "./student.js";
 import type { StudentDocumentRow, StudentRow } from "./student.js";
 
@@ -105,9 +106,12 @@ export function createStudentRouter(database: Queryable) {
         document_type: string;
         original_name: string;
         mime_type: string;
-        size: number;
+        size: number | null;
+        external_url: string | null;
       }>(
-        `SELECT document_type, original_name, mime_type, octet_length(file_data) AS size
+        `SELECT document_type, original_name, mime_type,
+           CASE WHEN file_data IS NULL THEN NULL ELSE octet_length(file_data) END AS size,
+           external_url
          FROM student_documents WHERE student_id = $1 ORDER BY document_type`,
         [id.data]
       );
@@ -116,7 +120,8 @@ export function createStudentRouter(database: Queryable) {
           type: row.document_type,
           fileName: row.original_name,
           contentType: row.mime_type,
-          size: Number(row.size)
+          size: row.size === null ? null : Number(row.size),
+          externalUrl: row.external_url
         }))
       });
     } catch (error: unknown) {
@@ -134,13 +139,27 @@ export function createStudentRouter(database: Queryable) {
 
     try {
       const result = await database.query<StudentDocumentRow>(
-        `SELECT document_type, original_name, mime_type, file_data
+        `SELECT document_type, original_name, mime_type, file_data, external_url
          FROM student_documents WHERE student_id = $1 AND document_type = $2`,
         [id.data, documentType]
       );
       const document = result.rows[0];
       if (!document) {
         next(new ApiError(404, "DOCUMENT_NOT_FOUND", "The requested document was not found"));
+        return;
+      }
+      if (document.external_url) {
+        response.status(409).json({
+          error: {
+            code: "EXTERNAL_DOCUMENT",
+            message: "This document is stored in Google Drive and must be opened there."
+          },
+          externalUrl: document.external_url
+        });
+        return;
+      }
+      if (!document.file_data) {
+        next(new ApiError(500, "DOCUMENT_STORAGE_ERROR", "The requested document has no stored file data"));
         return;
       }
 
@@ -152,6 +171,8 @@ export function createStudentRouter(database: Queryable) {
       next(error);
     }
   });
+
+  router.post("/import", createStudentImportHandler(database));
 
   router.get("/:id", async (request, response, next) => {
     const id = idSchema.safeParse(request.params.id);

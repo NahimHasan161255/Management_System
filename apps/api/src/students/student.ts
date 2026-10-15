@@ -53,14 +53,16 @@ export interface StudentDocument {
   type: StudentDocumentType;
   fileName: string;
   contentType: string;
-  size: number;
+  size: number | null;
+  externalUrl: string | null;
 }
 
 export interface StudentDocumentRow {
   document_type: StudentDocumentType;
   original_name: string;
   mime_type: string;
-  file_data: Buffer;
+  file_data: Buffer | null;
+  external_url?: string | null;
 }
 
 export interface StudentRow {

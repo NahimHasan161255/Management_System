@@ -68,6 +68,26 @@ only under staff supervision; do not expose this development app to a LAN or
 store real student information until authentication and authorization are
 implemented.
 
+#### Collecting responses with Google Forms
+
+You can share a Google Form and later import its Google Sheets CSV using
+**Import Google Forms CSV** on the student dashboard. Download the sample
+header template from that dialog and use the same question titles. Export from
+Google Sheets with **File → Download → Comma Separated Values (.csv)**. Import
+accepts up to 200 responses per file; it creates records for valid rows and
+shows invalid or possible-duplicate rows for review. Re-importing a sheet will
+skip already-known names or email addresses.
+
+Study-field answers should be separated with semicolons. Google Drive/Docs
+links from file-upload questions are saved as links in the student record; the
+documents themselves remain in the Form owner's Google Drive, and users still
+need Google permission to open them. Keep Drive sharing restricted, confirm
+who can access uploaded passports/certificates, and test whether students can
+answer upload questions with their Google accounts before sharing the form.
+CSV import does not make the student-management app public or synchronize new
+responses automatically; export and import the sheet again when you want to
+bring in additional responses.
+
 To run checks:
 
 ```powershell

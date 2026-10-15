@@ -54,7 +54,14 @@ export interface StudentDocument {
   type: StudentDocumentType;
   fileName: string;
   contentType: string;
-  size: number;
+  size: number | null;
+  externalUrl: string | null;
+}
+
+export interface StudentImportResult {
+  totalRows: number;
+  imported: { row: number; fullName: string; internalId: string }[];
+  skipped: { row: number; fullName: string; reason: string }[];
 }
 
 export interface StudentInput {
@@ -120,7 +127,6 @@ async function readResponse<T>(response: Response): Promise<T> {
 
 export async function listStudents(options: {
   q?: string;
-  status?: StudentStatus;
   page: number;
   pageSize: number;
   signal?: AbortSignal;
@@ -130,10 +136,14 @@ export async function listStudents(options: {
     pageSize: String(options.pageSize)
   });
   if (options.q) params.set("q", options.q);
-  if (options.status) params.set("status", options.status);
 
   const response = await fetch(`/api/students?${params}`, { signal: options.signal });
   return readResponse<StudentPage>(response);
+}
+
+export async function checkApiReadiness(signal?: AbortSignal): Promise<void> {
+  const response = await fetch("/api/ready", { signal });
+  await readResponse<{ status: string; database: string }>(response);
 }
 
 export async function createStudent(
@@ -168,6 +178,13 @@ export async function listStudentDocuments(id: string): Promise<StudentDocument[
   const response = await fetch(`/api/students/${encodeURIComponent(id)}/documents`);
   const body = await readResponse<{ documents: StudentDocument[] }>(response);
   return body.documents;
+}
+
+export async function importStudentCsv(file: File): Promise<StudentImportResult> {
+  const form = new FormData();
+  form.set("file", file);
+  const response = await fetch("/api/students/import", { method: "POST", body: form });
+  return readResponse<StudentImportResult>(response);
 }
 
 export async function updateStudent(id: string, input: StudentInput): Promise<Student> {

@@ -144,35 +144,6 @@ body {
   letter-spacing: 0.12em;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.summary-card {
-  border-color: #e7ebf0;
-  box-shadow: 0 2px 8px rgb(29 47 67 / 3%);
-}
-
-.summary-card .ant-statistic-title {
-  color: #718096;
-  font-size: 13px;
-}
-
-.summary-card .ant-statistic-content {
-  color: #203f5d;
-  font-size: 28px;
-  font-weight: 650;
-}
-
-.summary-card > .ant-card-body > .ant-typography {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-}
-
 .table-card {
   overflow: hidden;
   border-color: #e7ebf0;
@@ -376,6 +347,16 @@ body {
   padding-left: 20px;
 }
 
+.import-skipped {
+  max-height: 240px;
+  overflow: auto;
+  margin-top: 8px;
+}
+
+.import-skipped ul {
+  padding-left: 20px;
+}
+
 @media (max-width: 760px) {
   .topbar {
     height: 60px;
@@ -395,23 +376,6 @@ body {
 
   .page-heading > .ant-btn {
     flex-shrink: 0;
-  }
-
-  .summary-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .summary-card > .ant-card-body {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .summary-card > .ant-card-body > .ant-typography {
-    margin-top: 0;
-    text-align: right;
   }
 
   .table-toolbar {

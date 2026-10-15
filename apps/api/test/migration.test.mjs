@@ -9,6 +9,10 @@ import {
   down as downStudentIntake,
   up as upStudentIntake
 } from "../migrations/20261015090000_add_student_intake_details.js";
+import {
+  down as downExternalStudentDocuments,
+  up as upExternalStudentDocuments
+} from "../migrations/20261015093000_support_external_student_documents.js";
 
 describe("initial access-control migration", () => {
   it("creates constrained accounts, role-based permissions, and hashed sessions", () => {
@@ -42,6 +46,21 @@ describe("initial access-control migration", () => {
       assert.match(sql, /CREATE TABLE student_documents/);
       assert.match(sql, /file_data bytea NOT NULL/);
       assert.match(sql, /REFERENCES students\(id\) ON DELETE CASCADE/);
+    });
+
+    it("allows validated external document links while preserving either-or file storage", () => {
+      const statements = [];
+      upExternalStudentDocuments({ sql: (statement) => statements.push(statement) });
+
+      assert.equal(statements.length, 1);
+      assert.match(statements[0], /ADD COLUMN external_url text/);
+      assert.match(statements[0], /file_data IS NOT NULL AND external_url IS NULL/);
+      assert.match(statements[0], /drive.*google/);
+
+      const rollbackStatements = [];
+      downExternalStudentDocuments({ sql: (statement) => rollbackStatements.push(statement) });
+      assert.match(rollbackStatements[0], /DELETE FROM student_documents WHERE external_url IS NOT NULL/);
+      assert.match(rollbackStatements[0], /DROP COLUMN external_url/);
     });
 
     it("rolls back the document table and intake fields", () => {
