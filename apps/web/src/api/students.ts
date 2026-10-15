@@ -11,6 +11,19 @@ export const studentStatuses = [
 
 export type StudentStatus = (typeof studentStatuses)[number];
 
+export type StudentDocumentType =
+  | "passport_photo"
+  | "ssc_certificate"
+  | "ssc_transcript"
+  | "hsc_certificate"
+  | "hsc_transcript"
+  | "bachelor_certificate"
+  | "bachelor_transcript"
+  | "last_degree_certificate"
+  | "last_degree_transcript"
+  | "passport"
+  | "language_proof";
+
 export interface Student {
   id: string;
   internalId: string;
@@ -18,9 +31,30 @@ export interface Student {
   email: string | null;
   phone: string | null;
   nationality: string | null;
+  snsUrl: string | null;
+  lastDegree: string | null;
+  languageQualification: "JLPT" | "IELTS" | "MOI" | null;
+  studyFields: string[];
   status: StudentStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StudentIntakeInput {
+  fullName: string;
+  email: string;
+  phone: string;
+  snsUrl: string;
+  lastDegree: string;
+  languageQualification: "" | "JLPT" | "IELTS" | "MOI";
+  studyFields: string[];
+}
+
+export interface StudentDocument {
+  type: StudentDocumentType;
+  fileName: string;
+  contentType: string;
+  size: number;
 }
 
 export interface StudentInput {
@@ -113,6 +147,27 @@ export async function createStudent(
   });
   const body = await readResponse<{ student: Student }>(response);
   return body.student;
+}
+
+export async function submitStudentIntake(
+  profile: StudentIntakeInput,
+  files: Partial<Record<StudentDocumentType, File>>
+): Promise<Student> {
+  const form = new FormData();
+  form.set("profile", JSON.stringify(profile));
+  for (const [type, file] of Object.entries(files)) {
+    if (file) form.set(type, file);
+  }
+
+  const response = await fetch("/api/student-intake", { method: "POST", body: form });
+  const body = await readResponse<{ student: Student }>(response);
+  return body.student;
+}
+
+export async function listStudentDocuments(id: string): Promise<StudentDocument[]> {
+  const response = await fetch(`/api/students/${encodeURIComponent(id)}/documents`);
+  const body = await readResponse<{ documents: StudentDocument[] }>(response);
+  return body.documents;
 }
 
 export async function updateStudent(id: string, input: StudentInput): Promise<Student> {

@@ -4,8 +4,11 @@ import { z } from "zod";
 import { ApiError } from "../errors/api-error.js";
 import type { Queryable } from "../database/queryable.js";
 import { validateBody } from "../middleware/validate-body.js";
-import { studentStatuses, toStudent } from "./student.js";
-import type { StudentRow } from "./student.js";
+import { isStudentDocumentType, studentStatuses, toStudent } from "./student.js";
+import type { StudentDocumentRow, StudentRow } from "./student.js";
+
+const selectedStudentFields = `id, internal_id, full_name, email, phone, nationality, sns_url,
+  last_degree, language_qualification, study_fields, status, created_at, updated_at`;
 
 const studentFields = {
   fullName: z.string().trim().min(1).max(200),
@@ -38,6 +41,10 @@ const idSchema = z.string().uuid();
 
 export function createStudentRouter(database: Queryable) {
   const router = Router();
+  router.use((_request, response, next) => {
+    response.setHeader("Cache-Control", "no-store");
+    next();
+  });
 
   router.get("/", async (request, response, next) => {
     const query = listQuerySchema.safeParse(request.query);
@@ -52,7 +59,7 @@ export function createStudentRouter(database: Queryable) {
 
     if (q) {
       values.push(q);
-      conditions.push(`position(lower($${values.length}) in lower(concat_ws(' ', internal_id, full_name, email, phone, nationality))) > 0`);
+      conditions.push(`position(lower($${values.length}) in lower(concat_ws(' ', internal_id, full_name, email, phone, nationality, sns_url, last_degree, language_qualification, study_fields))) > 0`);
     }
     if (status) {
       values.push(status);
@@ -68,7 +75,7 @@ export function createStudentRouter(database: Queryable) {
       const total = Number(countResult.rows[0]?.total ?? 0);
       const pageValues = [...values, pageSize, (page - 1) * pageSize];
       const result = await database.query<StudentRow>(
-        `SELECT id, internal_id, full_name, email, phone, nationality, status, created_at, updated_at
+        `SELECT ${selectedStudentFields}
          FROM students ${where}
          ORDER BY updated_at DESC, id
          LIMIT $${pageValues.length - 1} OFFSET $${pageValues.length}`,
@@ -86,6 +93,66 @@ export function createStudentRouter(database: Queryable) {
     }
   });
 
+  router.get("/:id/documents", async (request, response, next) => {
+    const id = idSchema.safeParse(request.params.id);
+    if (!id.success) {
+      next(new ApiError(400, "VALIDATION_ERROR", "Student ID must be a UUID"));
+      return;
+    }
+
+    try {
+      const result = await database.query<{
+        document_type: string;
+        original_name: string;
+        mime_type: string;
+        size: number;
+      }>(
+        `SELECT document_type, original_name, mime_type, octet_length(file_data) AS size
+         FROM student_documents WHERE student_id = $1 ORDER BY document_type`,
+        [id.data]
+      );
+      response.json({
+        documents: result.rows.map((row) => ({
+          type: row.document_type,
+          fileName: row.original_name,
+          contentType: row.mime_type,
+          size: Number(row.size)
+        }))
+      });
+    } catch (error: unknown) {
+      next(error);
+    }
+  });
+
+  router.get("/:id/documents/:documentType", async (request, response, next) => {
+    const id = idSchema.safeParse(request.params.id);
+    const documentType = request.params.documentType;
+    if (!id.success || !isStudentDocumentType(documentType)) {
+      next(new ApiError(400, "VALIDATION_ERROR", "Student ID or document type is invalid"));
+      return;
+    }
+
+    try {
+      const result = await database.query<StudentDocumentRow>(
+        `SELECT document_type, original_name, mime_type, file_data
+         FROM student_documents WHERE student_id = $1 AND document_type = $2`,
+        [id.data, documentType]
+      );
+      const document = result.rows[0];
+      if (!document) {
+        next(new ApiError(404, "DOCUMENT_NOT_FOUND", "The requested document was not found"));
+        return;
+      }
+
+      response.setHeader("X-Content-Type-Options", "nosniff");
+      response.attachment(document.original_name);
+      response.type(document.mime_type);
+      response.send(document.file_data);
+    } catch (error: unknown) {
+      next(error);
+    }
+  });
+
   router.get("/:id", async (request, response, next) => {
     const id = idSchema.safeParse(request.params.id);
     if (!id.success) {
@@ -95,7 +162,7 @@ export function createStudentRouter(database: Queryable) {
 
     try {
       const result = await database.query<StudentRow>(
-        `SELECT id, internal_id, full_name, email, phone, nationality, status, created_at, updated_at
+        `SELECT ${selectedStudentFields}
          FROM students WHERE id = $1`,
         [id.data]
       );
@@ -143,7 +210,7 @@ export function createStudentRouter(database: Queryable) {
       const result = await database.query<StudentRow>(
         `INSERT INTO students (internal_id, full_name, email, phone, nationality, status)
          VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, internal_id, full_name, email, phone, nationality, status, created_at, updated_at`,
+         RETURNING ${selectedStudentFields}`,
         [
           internalId,
           input.fullName,
@@ -181,7 +248,7 @@ export function createStudentRouter(database: Queryable) {
       const result = await database.query<StudentRow>(
         `UPDATE students SET ${assignments.join(", ")}, updated_at = now()
          WHERE id = $1
-         RETURNING id, internal_id, full_name, email, phone, nationality, status, created_at, updated_at`,
+         RETURNING ${selectedStudentFields}`,
         [id.data, ...values]
       );
       const student = result.rows[0];

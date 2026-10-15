@@ -5,6 +5,10 @@ import {
   down as downStudents,
   up as upStudents
 } from "../migrations/20261014180000_create_students.js";
+import {
+  down as downStudentIntake,
+  up as upStudentIntake
+} from "../migrations/20261015090000_add_student_intake_details.js";
 
 describe("initial access-control migration", () => {
   it("creates constrained accounts, role-based permissions, and hashed sessions", () => {
@@ -22,6 +26,32 @@ describe("initial access-control migration", () => {
     assert.match(sql, /VALUES \('admin', 'Admin'\), \('staff', 'Staff'\)/);
     assert.match(sql, /WHERE roles\.code = 'admin'/);
     assert.match(sql, /WHERE roles\.code = 'staff'/);
+  });
+
+  describe("student intake migration", () => {
+    it("adds the requested profile fields and private document storage", () => {
+      const statements = [];
+      upStudentIntake({ sql: (statement) => statements.push(statement) });
+
+      assert.equal(statements.length, 1);
+      const sql = statements[0];
+      assert.match(sql, /ADD COLUMN sns_url text/);
+      assert.match(sql, /ADD COLUMN last_degree varchar\(200\)/);
+      assert.match(sql, /ADD COLUMN study_fields text\[\]/);
+      assert.match(sql, /cardinality\(study_fields\) <= 5/);
+      assert.match(sql, /CREATE TABLE student_documents/);
+      assert.match(sql, /file_data bytea NOT NULL/);
+      assert.match(sql, /REFERENCES students\(id\) ON DELETE CASCADE/);
+    });
+
+    it("rolls back the document table and intake fields", () => {
+      const statements = [];
+      downStudentIntake({ sql: (statement) => statements.push(statement) });
+
+      assert.equal(statements.length, 1);
+      assert.match(statements[0], /DROP TABLE student_documents/);
+      assert.match(statements[0], /DROP COLUMN study_fields/);
+    });
   });
 
   it("rolls back child tables before their referenced account tables", () => {

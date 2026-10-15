@@ -17,14 +17,15 @@ import {
   Typography
 } from "antd";
 import type { TableColumnsType } from "antd";
-import { StudentApiError } from "./api/students";
+import { StudentApiError, listStudentDocuments } from "./api/students";
 import {
   createStudent,
   listStudents,
   studentStatuses,
   updateStudent
 } from "./api/students";
-import type { Student, StudentInput, StudentStatus } from "./api/students";
+import type { Student, StudentDocument, StudentInput, StudentStatus } from "./api/students";
+import { StudentIntakePage } from "./StudentIntakePage";
 
 const { Header, Content } = Layout;
 const { Text, Title } = Typography;
@@ -69,6 +70,12 @@ function duplicateDescriptions(details: unknown): string[] {
 }
 
 export function App() {
+  return window.location.pathname === "/apply"
+    ? <StudentIntakePage />
+    : <StudentManager />;
+}
+
+function StudentManager() {
   const [students, setStudents] = useState<Student[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -80,6 +87,11 @@ export function App() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Student | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [documents, setDocuments] = useState<StudentDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [form] = Form.useForm<StudentInput>();
 
   const loadStudents = useCallback(async (signal?: AbortSignal) => {
@@ -118,6 +130,21 @@ export function App() {
     form.resetFields();
     form.setFieldsValue({ status: "consultation" });
     setModalOpen(true);
+  }
+
+  async function openDetails(student: Student) {
+    setSelectedStudent(student);
+    setDocuments([]);
+    setDetailError(null);
+    setDetailOpen(true);
+    setDocumentsLoading(true);
+    try {
+      setDocuments(await listStudentDocuments(student.id));
+    } catch (loadError) {
+      setDetailError(loadError instanceof Error ? loadError.message : "Could not load student documents.");
+    } finally {
+      setDocumentsLoading(false);
+    }
   }
 
   function openEdit(student: Student) {
@@ -231,7 +258,10 @@ export function App() {
       key: "action",
       align: "right",
       render: (_value, student) => (
-        <Button type="link" onClick={() => openEdit(student)}>Edit</Button>
+        <Space>
+          <Button type="link" onClick={() => void openDetails(student)}>View</Button>
+          <Button type="link" onClick={() => openEdit(student)}>Edit</Button>
+        </Space>
       )
     }
   ];
@@ -239,7 +269,7 @@ export function App() {
   return (
     <Layout className="app-layout">
       <Header className="topbar">
-        <a className="brand" href="/" aria-label="Japan Higher Study Management System home">
+        <a className="brand" href="/" aria-label="Japan Student Management System home">
           <span className="brand-mark">J</span>
           <span className="brand-name">HSM <Text type="secondary">JAPAN</Text></span>
         </a>
@@ -260,7 +290,10 @@ export function App() {
               <Title level={1}>Students</Title>
               <Text type="secondary">Manage student profiles and track their journey to Japan.</Text>
             </div>
-            <Button type="primary" size="large" onClick={openCreate}>Add student</Button>
+            <Space wrap>
+              <Button href="/apply" target="_blank">Preview student form</Button>
+              <Button type="primary" size="large" onClick={openCreate}>Add student</Button>
+            </Space>
           </section>
 
           {error && (
@@ -398,6 +431,52 @@ export function App() {
             </Text>
           )}
         </Form>
+      </Modal>
+
+      <Modal
+        title="Student information"
+        open={detailOpen}
+        onCancel={() => setDetailOpen(false)}
+        footer={<Button onClick={() => setDetailOpen(false)}>Close</Button>}
+      >
+        {selectedStudent && (
+          <div className="student-details">
+            <div><Text type="secondary">Student ID</Text><Text strong>{selectedStudent.internalId}</Text></div>
+            <div><Text type="secondary">Name</Text><Text>{selectedStudent.fullName}</Text></div>
+            <div><Text type="secondary">Contact</Text><Text>{selectedStudent.phone || "—"}</Text></div>
+            <div><Text type="secondary">Email</Text><Text>{selectedStudent.email || "—"}</Text></div>
+            <div><Text type="secondary">Social profile</Text>
+              {selectedStudent.snsUrl
+                ? <a href={selectedStudent.snsUrl} target="_blank" rel="noreferrer">{selectedStudent.snsUrl}</a>
+                : <Text>—</Text>}
+            </div>
+            <div><Text type="secondary">Last degree</Text><Text>{selectedStudent.lastDegree || "—"}</Text></div>
+            <div><Text type="secondary">Language qualification</Text><Text>{selectedStudent.languageQualification || "—"}</Text></div>
+            <div><Text type="secondary">Study fields</Text><Text>{selectedStudent.studyFields.join(", ") || "—"}</Text></div>
+            <div className="student-documents">
+              <Text strong>Uploaded documents</Text>
+              {detailError && <Alert type="error" showIcon message={detailError} />}
+              {documentsLoading ? (
+                <Spin size="small" />
+              ) : documents.length ? (
+                <ul>
+                  {documents.map((document) => (
+                    <li key={document.type}>
+                      <a
+                        href={`/api/students/${encodeURIComponent(selectedStudent.id)}/documents/${encodeURIComponent(document.type)}`}
+                        download={document.fileName}
+                      >
+                        {document.fileName}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : !detailError ? (
+                <Text type="secondary">No documents uploaded</Text>
+              ) : null}
+            </div>
+          </div>
+        )}
       </Modal>
     </Layout>
   );
